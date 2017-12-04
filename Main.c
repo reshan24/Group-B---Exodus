@@ -34,8 +34,8 @@ extern unsigned char keypad_read();
 int Count_10 = 0, heart_beat = 0, bpmfin = 0, risingEdge = 0;
 
 //HRV Module
-unsigned int capture1 = 0, capture2 = 0, riseEdge = 0, interval = 0, overFlw = 0,  prev = 0, num = 0, nn = 0, nn_50 = 0;
-float hrv = 0;
+unsigned int capture1 = 0, capture2 = 0, riseEdge = 0, interval = 0, overFlw = 0,  prev = 0, num = 0;
+float hrv = 0, nn = 0, nn_50 = 0;
 
 //Speaker Module
 int sound[2]={150, 155}; //insert notes of song in array
@@ -67,6 +67,8 @@ void Setup_Interrupts(void);
 void Setup_Interrupts(void);
 void Setup_PWM(void);
 void Setup_ADC(void);
+void BPM(void);
+void HRV(void);
 
 
 //Interrupt
@@ -77,61 +79,10 @@ void Setup_ADC(void);
 #pragma interrupt isr_function
 
 void isr_function(void) {
-    float temp = 0;
+    BPM();
 
-    if (INTCONbits.TMR0IF == 1) { // Check for timer0 overflow
-        Count_10 = Count_10 + 1;
-        if (Count_10 == 10) {
-            CloseTimer0();
-            bpmfin = 1;
-
-            INTCONbits.TMR0IF = 0;
-        } else {
-            INTCONbits.TMR0IF = 0;
-            WriteTimer0(0xBDC);// overflow in 1 second
-        }
-    }
-    if (INTCONbits.INT0F == 1) {
-        risingEdge = risingEdge + 1;
-        INTCONbits.INT0F = 0;
-    }
-
-    if (PIR1bits.TMR1IF == 1) {
-        PIR1bits.TMR1IF = 0;
-        overFlw++;
-    }
-    if (PIR1bits.CCP1IF == 1) {
-        //LATAbits.LATA0 = 1;
-        PIR1bits.CCP1IF = 0;
-        if (riseEdge == 0) {
-            if (num == 0) {
-                capture1 = ReadCapture1();
-            } else {
-                capture2 = ReadCapture1();
-            }
-        } else if ((riseEdge == 1) && (num == 0)) {
-            capture2 = ReadCapture1();
-        }
-        riseEdge++;
-        if ((riseEdge > 1) || (num == 1)) {
-            num = 1;
-            interval = 65535 * overFlw + capture2 - capture1;
-            nn++;
-            prev = capture2;
-            capture1 = prev;
-            temp = (float) interval / (float) 1000;
-            if ((float) temp > (float) 50) {
-                nn_50++;
-            }
-            riseEdge = 0;
-            if (nn > 15) {
-                hrv = (float) nn_50 / (float) 15;
-                hrv = hrv * 100;                
-                CloseCapture1();
-                CloseTimer1();
-            }
-        }
-    }
+    HRV();
+    
     if(PIR1bits.ADIF == 1){
         PIR1bits.ADIF = 0;
         
@@ -271,6 +222,26 @@ void Setup_PWM(){
 
 
 //Heart Rate Functions
+void BPM(){
+    if (INTCONbits.TMR0IF == 1) { // Check for timer0 overflow
+        Count_10 = Count_10 + 1;
+        if (Count_10 == 10) {
+            CloseTimer0();
+            bpmfin = 1;
+
+            INTCONbits.TMR0IF = 0;
+        } else {
+            INTCONbits.TMR0IF = 0;
+            WriteTimer0(0xBDC);// overflow in 1 second
+        }
+    }
+    if (INTCONbits.INT0F == 1) {
+        risingEdge = risingEdge + 1;
+        INTCONbits.INT0F = 0;
+    }
+}
+
+
 int Calc_Bpm() {
     int val60 = 0;
     val60 = heart_beat * 6;
@@ -287,6 +258,45 @@ void Bpm_LCD(int val60) {
 }
 
 //HRV Functions
+void HRV(){
+    float tempy;
+    if (PIR1bits.TMR1IF == 1) {
+        PIR1bits.TMR1IF = 0;
+        overFlw++;
+    }
+    if (PIR1bits.CCP1IF == 1) {
+        //LATAbits.LATA0 = 1;
+        PIR1bits.CCP1IF = 0;
+        if (riseEdge == 0) {
+            if (num == 0) {
+                capture1 = ReadCapture1();
+            } else {
+                capture2 = ReadCapture1();
+            }
+        } else if ((riseEdge == 1) && (num == 0)) {
+            capture2 = ReadCapture1();
+        }
+        riseEdge++;
+        if ((riseEdge > 1) || (num == 1)) {
+            num = 1;
+            interval = 65535 * overFlw + capture2 - capture1;
+            nn++;
+            prev = capture2;
+            capture1 = prev;
+            tempy = (float) interval / (float) 1000;
+            if ((float) tempy > (float) 50) {
+                nn_50++;
+            }
+            riseEdge = 0;
+            if (nn > 15) {
+                hrv = (float) nn_50 / (float) 15;
+                hrv = hrv * 100;                
+                CloseCapture1();
+                CloseTimer1();
+            }
+        }
+    }
+}
 int getHrv() {
     int hrvVal = 0;
     hrvVal = hrv;
